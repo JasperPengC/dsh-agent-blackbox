@@ -1,0 +1,63 @@
+{
+  "name": "dsh-agent-blackbox",
+  "version": "0.1.1",
+  "description": "DeepSeek Harness plugin: agent-blackbox dashboard in the sidebar and as a full panel — live monitoring, replay and cross-session cost overview.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" },
+    "./client": { "default": "./lib/client.js" },
+    "./icon": "./assets/icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "core",
+    "web",
+    "fixtures",
+    "assets",
+    "cordis.patch.yml",
+    "README.md",
+    "README.en.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "icon": "./assets/icon.svg",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-blackbox",
+    "agent-observability",
+    "replay",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "author": "GlowStorm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JasperPengC/dsh-agent-blackbox.git"
+  },
+  "homepage": "https://github.com/JasperPengC/dsh-agent-blackbox#readme",
+  "bugs": {
+    "url": "https://github.com/JasperPengC/dsh-agent-blackbox/issues"
+  },
+  "engines": {
+    "node": ">=22.19"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2 <0.3.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "sync:core": "node scripts/sync-core.mjs"
+  }
+}
