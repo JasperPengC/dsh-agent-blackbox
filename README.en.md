@@ -71,6 +71,12 @@ node scripts/sync-core.mjs --from /path/to/agent-blackbox
 - Cost estimates need a local pricing file; models without a price are excluded
 - Restart DSH after upgrading the plugin
 
+## Related repositories
+
+- [agent-blackbox](https://github.com/JasperPengC/agent-blackbox) — the main project:
+  session event model, dashboard, CLI and HTTP API. The bundled `core/` and `web/`
+  in this package are built and synced from it.
+
 ## Links
 
 - Main repository and documentation: https://github.com/JasperPengC/agent-blackbox

@@ -77,6 +77,11 @@ node scripts/sync-core.mjs --from /path/to/agent-blackbox
 - 成本估算依赖本地价格表 `~/.dsh/blackbox/pricing.json`；未知模型不计入合计
 - 升级插件后需要重启 DSH（宿主代码在启动时加载）；只改前端时可刷新面板
 
+## 相关仓库
+
+- [agent-blackbox](https://github.com/JasperPengC/agent-blackbox) — 主项目：会话事件模型、
+  仪表盘、CLI 与 HTTP API；本插件内置的 `core/` 与 `web/` 由它构建后同步过来。
+
 ## 链接
 
 - 主仓库与完整文档：https://github.com/JasperPengC/agent-blackbox
