@@ -1,0 +1,6 @@
+# dsh-agent-blackbox bundle patch：把面板这一行插进 loader。
+# 宿主半边（lib/index.js）向 DSH 自己的 webServer 注册 /blackbox 前缀路由，
+# 浏览器半边（lib/client.js）在侧栏与主区注册面板 —— 不需要额外起进程或端口。
+- insert:
+    - id: agent-blackbox
+      name: 'dsh-agent-blackbox'
