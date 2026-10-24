@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agent-blackbox · 会话总览</title>
+    <link rel="icon" href="favicon.svg" />
+    <script>
+      /* 先定主题再渲染样式，避免刷新时闪一下 */
+      try {
+        var m = localStorage.getItem('bb-theme') || 'auto'
+        document.documentElement.dataset.theme =
+          m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : m
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body { grid-template-rows: 52px minmax(0, 1fr); overflow: hidden; }
+      .ov { padding: var(--sp-4) var(--sp-5); overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; }
+      .ov-head { display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap; }
+      .ov-head h1 { margin: 0; font-size: var(--fs-lg); font-weight: 650; }
+      .ov-head .sub { font-size: var(--fs-xs); color: var(--text-3); }
+      .ov-head .grow { flex: 1; }
+      .stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--sp-2); }
+      .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 9px 11px; }
+      .stat-k { font-size: var(--fs-2xs); color: var(--text-4); }
+      .stat-v { font-size: var(--fs-lg); font-weight: 650; font-family: var(--mono); margin-top: 2px; }
+      .stat-v small { font-size: var(--fs-2xs); color: var(--text-3); font-family: var(--ui); font-weight: 400; }
+      .toolbar { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+      .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; }
+      .seg button { border: 0; background: transparent; color: var(--text-3); font-size: var(--fs-xs); padding: 3px 11px; border-radius: 999px; cursor: pointer; }
+      .seg button.on { background: var(--surface-3); color: var(--text); }
+      .tablewrap { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+      table { width: 100%; border-collapse: collapse; font-size: var(--fs-xs); }
+      thead th {
+        position: sticky; top: 0; z-index: 1; text-align: left; white-space: nowrap;
+        font-weight: 500; font-size: var(--fs-2xs); letter-spacing: .6px; text-transform: uppercase;
+        color: var(--text-4); background: var(--surface-2); border-bottom: 1px solid var(--line);
+        padding: 8px 10px; cursor: pointer; user-select: none;
+      }
+      thead th:hover { color: var(--text-2); }
+      thead th.num, tbody td.num { text-align: right; font-variant-numeric: tabular-nums; }
+      tbody td { padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+      tbody tr { cursor: pointer; }
+      tbody tr:hover td { background: var(--surface-2); }
+      tbody tr:last-child td { border-bottom: 0; }
+      .proj { display: inline-flex; align-items: center; gap: 6px; max-width: 420px; color: var(--text-3); font-family: var(--mono); font-size: var(--fs-2xs); }
+      .proj b { color: var(--text-2); font-weight: 500; }
+      .proj span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 260px; }
+      .proj-wrap { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+      .row-pin {
+        display: inline-grid; place-items: center; width: 20px; height: 20px; flex: none;
+        border: 0; border-radius: 4px; background: none; cursor: pointer;
+        color: var(--text-4); opacity: .7;
+      }
+      .row-pin:hover { background: var(--surface-3); color: var(--warn); opacity: 1; }
+      .row-pin.on { color: var(--warn); opacity: 1; }
+      .proj-title {
+        display: block; color: var(--text); font-family: var(--ui); font-size: var(--fs-sm);
+        font-weight: 500; max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .proj-sub { color: var(--text-4); font-size: var(--fs-2xs); max-width: 380px; }
+      .bar { display: inline-block; height: 6px; border-radius: 3px; background: linear-gradient(90deg, var(--accent), var(--purple)); vertical-align: middle; margin-right: 8px; }
+      .cost { font-family: var(--mono); }
+      .cost.missing { color: var(--warn); }
+      .cost.unknown { color: var(--text-4); }
+      .warnbar { font-size: var(--fs-xs); color: var(--warn); line-height: 1.7; padding: 10px 12px; border: 1px solid rgba(251,191,36,.22); background: var(--accent-dim); border-radius: var(--r-sm); }
+      .warnbar code { color: var(--text-3); font-size: var(--fs-2xs); }
+      .sk-row td { padding: 12px 10px; }
+      .empty-state {
+        display: flex; flex-direction: column; align-items: center; gap: 6px;
+        padding: 26px 18px; color: var(--text-3); font-size: var(--fs-sm); line-height: 1.75;
+        text-align: center;
+      }
+      .empty-state .ico { color: var(--text-4); margin-bottom: 2px; }
+      .empty-state ul { text-align: left; }
+      .empty-state b { display: block; color: var(--text); font-size: var(--fs-md); margin-bottom: 6px; }
+      .empty-state p { margin: 6px 0; }
+      .empty-state ul { margin: 4px 0 8px; padding-left: 18px; }
+      .empty-state code { font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-2); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+      .hint-bar {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-sm);
+        background: var(--surface-2); color: var(--text-2); font-size: var(--fs-xs);
+      }
+      .hint-bar kbd {
+        padding: 1px 5px; border-radius: 4px; background: var(--surface); border: 1px solid var(--line-strong);
+        font-family: var(--mono); font-size: var(--fs-2xs); color: var(--text-2);
+      }
+      .sk { height: 10px; border-radius: 4px; background: linear-gradient(90deg, var(--sk-from), var(--sk-mid), var(--sk-from)); background-size: 200% 100%; animation: sk 1.4s infinite; }
+      @keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand"><span class="brand-mark" data-icon="logo"></span>agent<span class="brand-accent">blackbox</span></div>
+      <div class="ident">
+        <h1 class="ident-title">会话总览</h1>
+        <div class="ident-meta"><span class="chip" id="scopeChip">全部 runtime</span><span class="ident-project" id="scanInfo"></span></div>
+      </div>
+      <div class="top-right">
+        <button class="icon-btn" data-theme-toggle title="主题：跟随系统" aria-label="切换主题"></button>
+        <button class="pill-btn" id="refresh" data-icon="refresh" data-tip="重新扫描所有会话">重新扫描</button>
+        <a class="icon-btn" href="./" data-icon="arrowLeft" data-tip="回到仪表盘" data-tip-pos="right" aria-label="回到仪表盘"></a>
+      </div>
+    </header>
+
+    <div class="ov">
+      <div class="ov-head">
+        <h1>成本与用量排行</h1>
+        <span class="sub" id="subtitle">正在扫描…</span>
+        <span class="grow"></span>
+      </div>
+
+      <div class="stats" id="stats"></div>
+
+      <div class="hint-bar" id="hintBar" hidden>
+        <span><kbd>/</kbd> 搜索 · <kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>Enter</kbd> 打开会话 ·
+          勾选「对比模式」后依次点两个会话可对比</span>
+        <button class="icon-btn" id="hintClose" data-icon="close" data-tip="关闭提示" aria-label="关闭提示"></button>
+      </div>
+
+      <div class="toolbar">
+        <div class="seg" id="runtimes"></div>
+        <div class="search-wrap" style="min-width: 260px">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input id="q" placeholder="搜索项目、会话 id…" autocomplete="off" />
+        </div>
+        <label class="toggle-lite">
+          <input type="checkbox" id="hideEmpty" checked /><span>隐藏无 token 的会话</span>
+        </label>
+        <label class="toggle-lite" style="margin-left:auto" title="开启后依次点两个会话即进入对比">
+          <input type="checkbox" id="compareMode" /><span>对比模式</span>
+        </label>
+      </div>
+
+      <div class="ov-status" id="ovStatus"><span class="boot-spin"></span><span id="ovStatusText">正在扫描本机会话…</span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr id="head"></tr></thead>
+          <tbody id="body">
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+            <tr class="sk-tr"><td colspan="8"><div class="sk-row"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="warnbar" id="warn" hidden></div>
+      <div class="warnbar" id="compareHint" hidden style="color:var(--accent);border-color:rgba(56,189,248,.25);background:rgba(56,189,248,.06)"></div>
+    </div>
+
+    <script type="module" src="overview.js"></script>
+  </body>
+</html>

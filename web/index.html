@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agent-blackbox</title>
+    <link rel="icon" href="favicon.svg" />
+    <script>
+      /* 先定主题再渲染样式，避免刷新时闪一下 */
+      try {
+        var m = localStorage.getItem('bb-theme') || 'auto'
+        document.documentElement.dataset.theme =
+          m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : m
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="style.css" />
+    <!-- 长任务观测：排障与性能脚本共用（window.__bb.longTasks） -->
+    <script>
+      window.__longTasks = []
+      window.__errors = []
+      addEventListener('error', (e) => window.__errors.push(String(e.message || e.error || e)))
+      addEventListener('unhandledrejection', (e) => window.__errors.push('rejection: ' + String(e.reason)))
+      window.__errors = []
+      try {
+        new PerformanceObserver((list) => {
+          for (const e of list.getEntries()) {
+            window.__longTasks.push({ start: Math.round(e.startTime), dur: Math.round(e.duration) })
+          }
+        }).observe({ entryTypes: ['longtask'] })
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <header class="top" aria-label="会话信息与操作">
+      <div class="brand"><span class="brand-mark" data-icon="logo"></span>agent<span class="brand-accent">blackbox</span></div>
+
+      <div class="ident">
+        <div class="ident-title-row">
+          <h1 id="sessionTitle" class="ident-title">加载中…</h1>
+          <button class="icon-btn switch-btn" id="sessionSwitch" data-icon="chevronDown" data-tip="切换会话（⌘K）" data-tip-pos="right" aria-label="切换会话" aria-haspopup="dialog"></button>
+        </div>
+        <div class="ident-meta">
+          <span class="chip" id="runtimeChip"></span>
+          <span class="chip" id="indexChip" hidden>索引补齐中</span>
+          <span class="ident-project" id="projectText"></span>
+        </div>
+      </div>
+
+      <div class="top-right">
+        <span class="live-pill" id="livePill" hidden><i></i><span id="liveText">LIVE</span></span>
+        <span class="clock"><b id="clock">00:00</b><span id="total">/ 00:00</span></span>
+        <button class="icon-btn" data-theme-toggle data-tip="切换主题（T）" data-tip-pos="right" aria-label="切换主题"></button>
+        <button class="icon-btn" id="btnHelp" data-icon="help" data-tip="快捷键与手势（?）" data-tip-pos="right" aria-label="快捷键帮助" aria-haspopup="dialog"></button>
+        <a class="icon-btn" id="compareLink" href="compare" data-icon="compare" data-tip="与另一个会话对比" data-tip-pos="right" aria-label="会话对比"></a>
+        <a class="icon-btn" href="overview" data-icon="overview" data-tip="多会话总览与成本排行" data-tip-pos="right" aria-label="会话总览"></a>
+        <button class="icon-btn panel-toggle" id="btnPanel" data-icon="panel" data-tip="事件面板（窄屏下切换）" data-tip-pos="right" aria-label="事件面板" aria-expanded="false"></button>
+        <button class="icon-btn" id="btnRefresh" data-icon="refresh" data-tip="刷新数据" data-tip-pos="right" aria-label="刷新"></button>
+      </div>
+    </header>
+
+    <div class="notice" id="notice" hidden>
+      <span id="noticeText"></span>
+      <button id="noticeAction" hidden data-tip="重新加载当前会话"></button>
+    </div>
+
+    <!-- 启动骨架：JS 未执行前就有结构，避免"白屏不知道是不是挂了" -->
+    <main id="main" class="has-boot" aria-label="仪表盘主区" aria-busy="true">
+      <div class="boot-skeleton" role="status" aria-live="polite">
+        <div class="boot-col boot-rail">
+          <div class="sk-line w40"></div>
+          <div class="boot-kpis">
+            <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+            <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+            <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+          </div>
+          <div class="sk-line w60"></div>
+          <div class="sk-block h64"></div>
+          <div class="sk-line w50"></div>
+          <div class="sk-block h90"></div>
+        </div>
+        <div class="boot-col boot-stage">
+          <div class="sk-line w30"></div>
+          <div class="boot-agents">
+            <div class="agent-card skeleton tall"></div>
+            <div class="agent-card skeleton tall"></div>
+          </div>
+          <div class="sk-line w24"></div>
+          <div class="boot-wf">
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+          </div>
+        </div>
+        <div class="boot-col boot-inspector">
+          <div class="sk-tabs"><span></span><span></span><span></span></div>
+          <div class="sk-search"></div>
+          <div class="boot-list">
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+            <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+    <div class="boot-status" id="bootStatus">
+      <span class="boot-spin" aria-hidden="true"></span>
+      <span id="bootText">正在读取会话索引…</span>
+      <span id="bootElapsed" class="boot-elapsed">0.0s</span>
+      <button id="bootRetry" class="boot-retry" hidden>刷新</button>
+    </div>
+
+    <!-- 启动兜底：不依赖 app.js。
+         模块加载失败时静态骨架会永远停住 —— 这里负责计时、慢提示、失败提示 + 重试。 -->
+    <script>
+      (function () {
+        var t0 = performance.now();
+        var txt = document.getElementById('bootText');
+        var elapsed = document.getElementById('bootElapsed');
+        var retry = document.getElementById('bootRetry');
+        var status = document.getElementById('bootStatus');
+        var done = false;
+        var failed = false;
+        var started = false;
+
+        window.__bbBootDone = function () {
+          done = true;
+          if (status) status.hidden = true;
+        };
+
+        var tick = setInterval(function () {
+          if (done || failed) return;
+          var ms = performance.now() - t0;
+          if (elapsed) elapsed.textContent = (ms / 1000).toFixed(1) + 's';
+          if (txt && ms > 1500 && !txt.dataset.slow) {
+            txt.dataset.slow = '1';
+            txt.textContent = '首次打开大会话需要解析，请稍候…';
+          }
+        }, 200);
+
+        function showRetry(message) {
+          if (done || failed) return;
+          failed = true;
+          clearInterval(tick);
+          if (status) {
+            status.hidden = false;
+            status.classList.add('is-failed');
+          }
+          var title = document.getElementById('sessionTitle');
+          if (title) title.textContent = '加载失败';
+          if (elapsed) elapsed.textContent = '';
+          if (retry) retry.hidden = false;
+          if (txt) {
+            txt.textContent = message;
+            txt.style.cursor = 'pointer';
+            txt.style.textDecoration = 'underline';
+            txt.addEventListener('click', function () {
+              location.reload();
+            });
+          }
+          if (retry) {
+            retry.addEventListener('click', function () {
+              location.reload();
+            });
+          }
+        }
+
+        // 模块/资源加载失败：立刻给出可读提示（而不是静默卡住）
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (done) return;
+            var t = e.target;
+            var url = t && (t.src || t.href) ? String(t.src || t.href) : '';
+            var name = url ? url.split('/').pop().split('?')[0] : '';
+            if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) {
+              showRetry('前端资源加载失败' + (name ? '：' + name : '') + '（刷新重试）');
+            }
+          },
+          true,
+        );
+
+        // 10 秒还没进入应用：说明脚本没启动（版本不一致/网络失败/被拦截）
+        setTimeout(function () {
+          if (done || failed) return;
+          if (window.__bb) return;
+          showRetry('前端脚本未能启动（可能是插件版本未更新）。点击刷新重试');
+        }, 10000);
+      })();
+    </script>
+
+    <!-- ── 首帧分帧挂载 ─────────────────────────────────────────────────────
+         整页一次性布局实测要 60~100ms（Long Tasks API 记为一次长任务）。
+         把三个面板放进 <template>（惰性，不参与布局），再由 JS 一帧挂一个：
+         每个任务只处理一块，长任务自然消失。 -->
+    <template id="tplStage">
+      <section class="stage-col" aria-label="执行流与工具瀑布">
+              <div class="pane">
+                <div class="pane-head">
+                  <span class="pane-title">执行流</span>
+                  <span class="pane-sub" id="stageSub"></span>
+                </div>
+                <div class="agents" id="agents">
+                  <div class="agent-card skeleton tall"></div>
+                  <div class="agent-card skeleton tall"></div>
+                </div>
+              </div>
+
+              <div class="pane stage-feed-pane" id="stageFeedPane" hidden>
+                <div class="pane-head">
+                  <span class="pane-title">最近事件</span>
+                  <span class="pane-sub" id="stageFeedSub"></span>
+                </div>
+                <div class="stage-feed" id="stageFeed"></div>
+              </div>
+
+              <div class="pane wf-pane">
+                <div class="pane-head">
+                  <span class="pane-title">工具瀑布</span>
+                  <span class="pane-sub" id="wfMeta"></span>
+                  <span class="pane-spacer"></span>
+                  <label class="toggle-lite"><input type="checkbox" id="onlyFail" /><span>只看失败</span></label>
+                </div>
+                <div class="wf-legend" id="wfLegend" hidden></div>
+                <div class="waterfall" id="waterfall">
+                  <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                  <div class="sk-row"></div><div class="sk-row"></div><div class="sk-row"></div>
+                </div>
+              </div>
+            </section>
+
+      
+    </template>
+    <template id="tplRail">
+            <aside class="rail" aria-label="指标与归因">
+              <section class="block">
+                <div class="block-head">指标</div>
+                <div class="kpis" id="kpis">
+                  <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+                  <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+                  <div class="kpi skeleton"></div><div class="kpi skeleton"></div>
+                </div>
+              </section>
+
+              <section class="block">
+                <div class="block-head">Token 用量 <em id="sparkMeta"></em></div>
+                <div class="spark-wrap"><canvas id="spark" height="56"></canvas></div>
+              </section>
+
+              <section class="block">
+                <div class="block-head">阻塞归因 <em id="attSum"></em></div>
+                <div class="att" id="attribution"><div class="empty-slot">—</div></div>
+              </section>
+
+              <section class="block">
+                <div class="block-head">会话 <em id="railMetaNote"></em></div>
+                <div class="rail-kv" id="railKv"></div>
+                <div class="kinds" id="kindsDist"></div>
+              </section>
+            </aside>
+
+      
+    </template>
+    <template id="tplInspector">
+      <aside class="inspector-col" aria-label="事件、工具与文件">
+              <div class="tabs" id="tabs" role="tablist" aria-label="视图切换">
+                <button data-tab="events" class="on" role="tab" aria-selected="true" aria-controls="rlist" data-icon="list" data-tip="事件列表（/ 搜索，↑↓ 选择）">事件</button>
+                <button data-tab="tools" role="tab" aria-selected="false" aria-controls="rlist" data-icon="wrench" data-tip="工具调用列表（按时间倒序）">工具</button>
+                <button data-tab="files" role="tab" aria-selected="false" aria-controls="rlist" data-icon="file" data-tip="本次改动过的文件">文件</button>
+              </div>
+              <div class="filters">
+                <div class="search-wrap">
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                  <input id="search" aria-label="搜索事件、工具、输出（按 / 聚焦）" placeholder="搜索事件、工具、输出…（/）" autocomplete="off" />
+                <button class="search-clear" id="searchClear" data-icon="clear" data-tip="清除搜索（Esc）" aria-label="清除搜索" hidden></button>
+                </div>
+                <div class="chips" id="kindChips"></div>
+              </div>
+              <div class="rlist" id="rlist" role="listbox" aria-label="事件列表" tabindex="0">
+                <div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div>
+                <div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div>
+                <div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div>
+                <div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div><div class="rrow skeleton-row"></div>
+              </div>
+              <div class="rfoot" id="rInfo"></div>
+            </aside>
+    
+    </template>
+
+    <footer class="transport">
+      <div class="play-progress" id="playProgress" aria-hidden="true"></div>
+      <div class="controls">
+        <button class="icon-btn primary" id="btnPlay" data-icon="play" data-tip="播放 / 暂停（空格）" data-tip-pos="top" aria-label="播放 / 暂停"></button>
+        <button class="pill-btn" id="btnFollow" data-icon="follow" data-tip="始终跟随最新事件" data-tip-pos="top"><span class="lbl">跟随最新</span></button>
+        <button class="pill-btn on" id="btnFocus" data-icon="focus" data-tip="焦点跟随：播放/跟随时跳过空闲，自动滚动并高亮当前的工具 / 事件 / agent（F 切换）" data-tip-pos="top"><span class="lbl">焦点跟随</span></button>
+        <select id="speed" class="select" data-tip="回放速度" data-tip-pos="top" aria-label="回放速度">
+          <option value="0.25">0.25×</option><option value="1">1×</option>
+          <option value="2" selected>2×</option><option value="4">4×</option><option value="8">8×</option>
+        </select>
+        <span class="timecode"><b id="tlabel">00:00.0</b><span id="tlabelEnd">/ 00:00.0</span></span>
+        <button class="pill-btn" id="winChip" data-icon="fit" data-tip="滚轮缩放 / 拖拽框选 / 双击复位" data-tip-pos="top"><span class="lbl">全量</span></button>
+        <span class="flex"></span>
+        <span class="foot-meta" id="footMeta"></span>
+      </div>
+      <div class="timeline-wrap">
+              <canvas id="timeline" title="滚轮缩放 · 拖拽框选 · Shift+拖拽平移 · 双击复位"></canvas>
+              <div class="tl-skeleton" id="tlSkeleton" aria-hidden="true">
+                <div class="tl-sk-bar" style="left:2%;width:8%"></div>
+                <div class="tl-sk-bar" style="left:12%;width:14%"></div>
+                <div class="tl-sk-bar" style="left:28%;width:6%"></div>
+                <div class="tl-sk-bar" style="left:36%;width:20%"></div>
+                <div class="tl-sk-bar" style="left:58%;width:10%"></div>
+                <div class="tl-sk-bar" style="left:70%;width:24%"></div>
+              </div>
+              <div class="tl-tip" id="tlTip" hidden></div>
+            </div>
+    </footer>
+
+    <div class="drawer" id="drawer" hidden role="dialog" aria-modal="true" aria-labelledby="drawerTitle" tabindex="-1">
+      <div class="drawer-head">
+        <div class="drawer-title" id="drawerTitle">详情</div>
+        <button class="icon-btn" id="drawerClose" data-icon="close" data-tip="关闭（Esc）" aria-label="关闭"></button>
+      </div>
+      <pre class="drawer-body" id="drawerBody"></pre>
+      <div class="drawer-foot">
+        <button class="pill-btn" id="drawerJump" data-icon="jump" data-tip="把播放头定位到这条记录">跳到这一步</button>
+        <button class="pill-btn" id="drawerCopy" data-icon="copy" data-tip="复制这条记录的原始 JSON">复制 JSON</button>
+      </div>
+    </div>
+    <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+
+    <div class="embed-hint" id="embedHint" hidden>
+      <span><kbd>空格</kbd> 播放 / 暂停</span>
+      <span><kbd>拖拽</kbd> 时间轴缩放</span>
+      <span><kbd>F</kbd> 焦点跟随</span>
+      <span><kbd>⌘K</kbd> 切换会话</span>
+      <button id="embedHintClose" aria-label="关闭提示">知道了</button>
+    </div>
+
+    <div class="switcher" id="switcher" hidden>
+      <div class="switcher-box" role="dialog" aria-modal="true" aria-label="切换会话">
+        <div class="switcher-search">
+          <span data-icon="search"></span>
+          <input id="switchSearch" placeholder="搜索会话标题 / 项目 / ID…" autocomplete="off" aria-label="搜索会话" />
+          <kbd>Esc</kbd>
+        </div>
+        <div class="switcher-list" id="switchList" role="listbox" aria-label="会话列表"></div>
+        <div class="switcher-foot">
+          <span>↑↓ 选择 · Enter 切换</span>
+          <span class="sw-links">
+            <a href="overview" data-tip="多会话总览与成本排行">总览</a>
+            <a href="compare" data-tip="与另一个会话对比">对比</a>
+            <button class="pill-btn" id="switchRefresh" data-icon="refresh" data-tip="重新扫描本机会话">刷新列表</button>
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="onboard" id="onboard" hidden role="dialog" aria-modal="true" aria-labelledby="onboardTitle">
+      <div class="onboard-box">
+        <div class="onboard-head">
+          <span class="onboard-mark" data-icon="logo" data-icon-size="32"></span>
+          <b id="onboardTitle">30 秒看懂这个面板</b>
+          <button class="icon-btn" id="onboardClose" data-icon="close" data-tip="关闭引导" aria-label="关闭引导"></button>
+        </div>
+        <div class="onboard-grid">
+          <section>
+            <h4><span data-icon="user"></span>执行流</h4>
+            <p>每个 agent 一行：当前状态、最近输出、工具/ token 用量。被阻塞的会标红并显示在等谁。</p>
+          </section>
+          <section>
+            <h4><span data-icon="wrench"></span>工具瀑布</h4>
+            <p>按耗时排序的调用。红条斜纹 = 失败；点上方颜色图例可只看某类工具。</p>
+          </section>
+          <section>
+            <h4><span data-icon="activity"></span>时间轴</h4>
+            <p>拖拽框选一段放大，滚轮以光标为锚点缩放，双击复位。斜纹是空闲区间。</p>
+          </section>
+          <section>
+            <h4><span data-icon="list"></span>事件与快捷键</h4>
+            <p><kbd>?</kbd> 看全部快捷键，<kbd>T</kbd> 切换主题；右侧事件列表可搜索、<kbd>↑</kbd><kbd>↓</kbd> 选择。</p>
+          </section>
+        </div>
+        <div class="onboard-foot">
+          <span>这些提示随时可以在 <kbd>?</kbd> 里重新查看</span>
+          <button class="pill-btn primary" id="onboardOk" data-tip="关闭引导，之后可在 ? 里重新打开">开始使用</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="help-panel" id="helpPanel" hidden role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+      <div class="help-box">
+        <div class="help-head">
+          <b id="helpTitle">快捷键与手势</b>
+          <button class="icon-btn" id="helpClose" data-icon="close" data-tip="关闭（Esc）" aria-label="关闭帮助"></button>
+        </div>
+        <div class="help-body">
+          <section>
+            <h4>键盘</h4>
+            <dl>
+              <dt><kbd>Space</kbd></dt><dd>播放 / 暂停</dd>
+              <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>后退 / 前进 1 秒（按住 <kbd>Shift</kbd> 为 5 秒）</dd>
+              <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>在事件列表中移动</dd>
+              <dt><kbd>Enter</kbd></dt><dd>打开选中项详情</dd>
+              <dt><kbd>+</kbd> <kbd>-</kbd></dt><dd>以播放头为锚点缩放时间窗</dd>
+              <dt><kbd>0</kbd></dt><dd>时间窗复位到全量</dd>
+              <dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>跳到开头 / 结尾</dd>
+              <dt><kbd>Esc</kbd></dt><dd>关闭帮助或详情</dd>
+              <dt><kbd>?</kbd></dt><dd>打开本页</dd>
+              <dt><kbd>T</kbd></dt><dd>切换主题（跟随系统 / 深色 / 浅色）</dd>
+              <dt><kbd>/</kbd></dt><dd>聚焦搜索框（<kbd>Esc</kbd> 清空并退出）</dd>
+              <dt><kbd>⌘K</kbd> / <kbd>Ctrl K</kbd></dt><dd>快速切换会话</dd>
+              <dt><kbd>P</kbd></dt><dd>收藏 / 取消收藏当前会话</dd>
+              <dt><kbd>F</kbd></dt><dd>焦点跟随：跳过空闲 + 自动滚动高亮当前焦点</dd>
+            </dl>
+          </section>
+          <section>
+            <h4>鼠标 / 触控板</h4>
+            <dl>
+              <dt>时间轴滚轮</dt><dd>以光标为锚点缩放（对着哪放大哪）</dd>
+              <dt>时间轴拖拽</dt><dd>框选一段区间，主视图切过去</dd>
+              <dt><kbd>Shift</kbd> + 拖拽</dt><dd>平移时间窗</dd>
+              <dt>双击时间轴</dt><dd>复位到全量</dd>
+              <dt>瀑布 / 事件行</dt><dd>点击跳到该时刻并打开详情</dd>
+              <dt>工具图例</dt><dd>点击只看该类工具调用（再点取消）</dd>
+            </dl>
+          </section>
+          <section>
+            <h4>地址参数（可分享）</h4>
+            <dl>
+              <dt><code>?file=</code></dt><dd>指定会话文件</dd>
+              <dt><code>?t=</code></dt><dd>定位到某一时刻（毫秒）</dd>
+              <dt><code>?from=&amp;to=</code></dt><dd>时间窗（毫秒）</dd>
+              <dt><code>?embed=1</code></dt><dd>嵌入模式（插件面板用，隐藏自身顶栏）</dd>
+            </dl>
+          </section>
+        </div>
+        <div class="help-foot">
+          <button class="pill-btn" id="helpReplayGuide" data-tip="重新显示首次使用引导">重新查看引导</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="error-card" id="errorCard" hidden role="alertdialog" aria-modal="true" aria-labelledby="errorTitle">
+      <div class="error-box">
+        <span class="error-icon" data-icon="alert" data-icon-size="32"></span>
+        <b id="errorTitle">加载失败</b>
+        <p id="errorText"></p>
+        <div class="error-actions">
+          <button class="pill-btn primary" id="errorRetry" data-icon="refresh">重试</button>
+          <a class="pill-btn" href="overview" data-icon="overview">打开总览</a>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

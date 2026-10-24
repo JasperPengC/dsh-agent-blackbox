@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>agent-blackbox · 会话对比</title>
+    <link rel="icon" href="favicon.svg" />
+    <script>
+      /* 先定主题再渲染样式，避免刷新时闪一下 */
+      try {
+        var m = localStorage.getItem('bb-theme') || 'auto'
+        document.documentElement.dataset.theme =
+          m === 'auto' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : m
+      } catch (e) {}
+    </script>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body { grid-template-rows: 52px minmax(0, 1fr); overflow: hidden; }
+      .cmp { padding: var(--sp-4) var(--sp-5); overflow-y: auto; display: flex; flex-direction: column; gap: var(--sp-4); min-height: 0; }
+      .pickers { display: grid; grid-template-columns: 1fr 40px 1fr; gap: var(--sp-3); align-items: stretch; }
+      .pick {
+        background: var(--surface); border: 1px solid var(--line); border-radius: var(--r);
+        padding: 11px 13px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+      }
+      .pick:hover { border-color: var(--line-strong); }
+      .pick-head { display: flex; align-items: center; gap: 8px; }
+      .pick-goal { font-size: var(--fs-md); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pick-meta { font-size: var(--fs-2xs); color: var(--text-4); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .pick-empty { color: var(--text-4); font-size: var(--fs-sm); display: grid; place-items: center; min-height: 62px; }
+      .vs { display: grid; place-items: center; color: var(--text-4); font-size: var(--fs-2xs); letter-spacing: 1px; }
+
+      .cards { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
+      .card2 { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+      .card2 h3 { margin: 0 0 8px; font-size: var(--fs-2xs); letter-spacing: 1px; text-transform: uppercase; color: var(--text-4); font-weight: 500; }
+      .big { display: flex; gap: var(--sp-4); flex-wrap: wrap; }
+      .big div { display: flex; flex-direction: column; gap: 1px; }
+      .big span { font-size: var(--fs-2xs); color: var(--text-4); }
+      .big b { font-size: var(--fs-lg); font-family: var(--mono); font-weight: 650; }
+
+      table.metrics { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+      .metricswrap { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; }
+      table.metrics th {
+        text-align: right; font-weight: 500; font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .6px;
+        color: var(--text-4); padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+      }
+      table.metrics th:first-child { text-align: left; }
+      table.metrics td { padding: 7px 12px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--mono); }
+      table.metrics td:first-child { text-align: left; font-family: var(--ui); color: var(--text-3); }
+      table.metrics tr:last-child td { border-bottom: 0; }
+      .d-up { color: var(--bad); }
+      .d-down { color: var(--ok); }
+      .d-flat { color: var(--text-4); }
+
+      .tools { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 14px 14px; }
+      .tools h3 { margin: 0 0 10px; font-size: var(--fs-2xs); letter-spacing: 1px; text-transform: uppercase; color: var(--text-4); font-weight: 500; }
+      .tool-row { display: grid; grid-template-columns: 150px 1fr 1fr; gap: var(--sp-3); align-items: center; height: 22px; }
+      .tool-name { font-size: var(--fs-xs); color: var(--text-2); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .tool-track { position: relative; height: 8px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+      .tool-bar { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
+      .tool-bar.l { background: var(--accent); }
+      .tool-bar.r { background: var(--purple); }
+      .tool-n { font-size: var(--fs-2xs); color: var(--text-4); font-family: var(--mono); }
+      .legend { display: flex; gap: 14px; font-size: var(--fs-2xs); color: var(--text-4); margin-bottom: 8px; }
+      .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+      .warnbar { font-size: var(--fs-xs); color: var(--warn); line-height: 1.7; padding: 10px 12px; border: 1px solid rgba(251,191,36,.22); background: var(--accent-dim); border-radius: var(--r-sm); }
+      .warnbar[hidden] { display: none; }
+
+      .picker-panel { position: fixed; inset: 0; background: rgba(4,7,12,.6); z-index: 30; display: grid; place-items: center; }
+      .picker-panel[hidden] { display: none; }
+      .picker-box { width: min(720px, 92vw); max-height: 76vh; background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--r-lg); display: flex; flex-direction: column; overflow: hidden; }
+      .picker-top { display: flex; gap: 8px; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+      .picker-top b { font-size: var(--fs-sm); }
+      .picker-top .search-wrap { flex: 1; }
+      .picker-hint { font-size: var(--fs-2xs); color: var(--text-4); white-space: nowrap; }
+      .picker-list { overflow-y: auto; }
+      .picker-row { display: grid; grid-template-columns: 92px 130px minmax(0,1fr); gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: var(--fs-xs); align-items: center; }
+      .picker-row:hover { background: var(--surface-2); }
+      .picker-row.on { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--accent); }
+      .picker-empty {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        padding: 28px; color: var(--text-4); font-size: var(--fs-xs);
+      }
+      .picker-empty .ico { color: var(--text-4); }
+      .picker-row .goal { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+      .sk { height: 10px; border-radius: 4px; background: linear-gradient(90deg, var(--sk-from), var(--sk-mid), var(--sk-from)); background-size: 200% 100%; animation: sk 1.4s infinite; }
+      @keyframes sk { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <div class="brand"><span class="brand-mark" data-icon="logo"></span>agent<span class="brand-accent">blackbox</span></div>
+      <div class="ident">
+        <h1 class="ident-title">会话对比</h1>
+        <div class="ident-meta"><span class="chip" id="scopeChip">左右两个会话</span></div>
+      </div>
+      <div class="top-right">
+        <button class="icon-btn" data-theme-toggle title="主题：跟随系统" aria-label="切换主题"></button>
+        <a class="icon-btn" href="overview" data-icon="overview" data-tip="会话总览" data-tip-pos="right" aria-label="会话总览"></a>
+        <a class="icon-btn" href="./" data-icon="arrowLeft" data-tip="回到仪表盘" data-tip-pos="right" aria-label="回到仪表盘"></a>
+      </div>
+    </header>
+
+    <div class="cmp">
+      <div class="pickers">
+        <div class="pick" id="pickLeft" role="button" tabindex="0"></div>
+        <div class="vs">VS</div>
+        <div class="pick" id="pickRight" role="button" tabindex="0"></div>
+      </div>
+
+      <div class="metricswrap" id="metricsWrap" hidden>
+        <table class="metrics">
+          <thead><tr><th>指标</th><th>左</th><th>右</th><th>Δ（右 − 左）</th></tr></thead>
+          <tbody id="metricsBody"></tbody>
+        </table>
+      </div>
+
+      <div class="tools" id="toolsWrap" hidden>
+        <h3>工具分布对比</h3>
+        <div class="legend">
+          <span><i style="background:var(--accent)"></i>左侧</span>
+          <span><i style="background:var(--purple)"></i>右侧</span>
+          <span style="margin-left:auto">条长 = 占该会话工具调用的比例 · 数字 = 绝对次数</span>
+        </div>
+        <div id="toolsBody"></div>
+      </div>
+
+      <div class="warnbar" id="warn" hidden></div>
+    </div>
+
+    <div class="picker-panel" id="pickerPanel" hidden>
+      <div class="picker-box">
+        <div class="picker-top">
+          <b id="pickerTitle">选择会话</b>
+          <div class="search-wrap">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            <input id="pickerSearch" placeholder="搜索项目、会话 id、目标…" autocomplete="off" />
+          </div>
+          <span class="picker-hint" id="pickerStatus"><span class="boot-spin"></span> 正在加载会话…</span>
+          <button class="icon-btn" id="pickerClose" data-icon="close" data-tip="关闭（Esc）" aria-label="关闭"></button>
+        </div>
+        <div class="picker-list" id="pickerList">
+          <div class="picker-row skeleton-row"></div><div class="picker-row skeleton-row"></div>
+          <div class="picker-row skeleton-row"></div><div class="picker-row skeleton-row"></div>
+          <div class="picker-row skeleton-row"></div><div class="picker-row skeleton-row"></div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="compare.js"></script>
+  </body>
+</html>
