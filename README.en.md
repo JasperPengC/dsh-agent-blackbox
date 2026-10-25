@@ -23,6 +23,10 @@ Restart DSH, then open *Blackbox* from the sidebar. You can also install it from
 The published package bundles the compiled core (`core/`) and renderer (`web/`),
 so no separate agent-blackbox install or local build is required.
 
+It is also listed in the DSH plugin market (*Settings → Plugin market*); search for
+`agent-blackbox` and install it in one click
+([listing](https://dsh-plugin.org/plugins/jasperpengc/dsh-agent-blackbox)).
+
 ## What you get
 
 - **Live**: sessions that are still being written refresh incrementally

@@ -22,6 +22,9 @@ dsh plugin --profile desktop add dsh-agent-blackbox
 发布包**内置编译后的核心**（`core/`）与前端（`web/`），不需要在机器上另外安装
 agent-blackbox，也不用本地构建。
 
+也可以在 DSH 的「设置 → 插件市场」里搜索 `agent-blackbox` 一键安装
+（已收录：[dsh-plugin.org](https://dsh-plugin.org/zh/plugins/jasperpengc/dsh-agent-blackbox)）。
+
 ## 入口
 
 | 入口 | 说明 |
