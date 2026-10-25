@@ -11,7 +11,7 @@ DeepSeek Harness 插件：在侧栏打开 [agent-blackbox](https://github.com/Ja
 
 ![面板回放](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-dark.gif)
 
-<sub>真实面板 UI · 合成会话 · 4× 回放 · [亮色录屏](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-light.gif)</sub>
+<sub>真实面板 UI · 合成会话 · 4× 回放 · [亮色录屏](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-light.gif) · 网速慢可以看[亮色截图](https://raw.githubusercontent.com/JasperPengC/dsh-agent-blackbox/main/docs/panel-light.png)</sub>
 
 ## 安装
 

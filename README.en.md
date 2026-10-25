@@ -13,7 +13,7 @@ overview. It mounts inside the host process — no extra process, no extra port.
 
 ![Panel replay](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-dark.gif)
 
-<sub>Real panel UI · synthetic session · 4× playback · [light recording](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-light.gif)</sub>
+<sub>Real panel UI · synthetic session · 4× playback · [light recording](https://raw.githubusercontent.com/JasperPengC/agent-blackbox/main/docs/playback-light.gif) · slow connection? [open the static light screenshot](https://raw.githubusercontent.com/JasperPengC/dsh-agent-blackbox/main/docs/panel-light.png)</sub>
 
 ## Install
 
