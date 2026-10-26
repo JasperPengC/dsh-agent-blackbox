@@ -5,3 +5,5 @@ export function emptyStateMessage(input: {
   eventsCount: number
   totalEvents?: number
 }): string
+
+export function listNeedsRebuild(datasetTotal: string | undefined, total: number, hasInner: boolean): boolean

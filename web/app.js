@@ -29,7 +29,7 @@ import { cycleTheme, initTheme, resolvedTheme } from './theme.js'
 import { hydrateIcons, icon, kindIcon } from './icons.js'
 import { initTooltips } from './tooltip.js'
 import { getPins, onPinsChange, togglePin } from './pins.js'
-import { emptyStateMessage } from './list-state.js'
+import { emptyStateMessage, listNeedsRebuild } from './list-state.js'
 
 import {
   brushWindow,
@@ -498,6 +498,12 @@ async function switchSession(file) {
   cursorIndex = -1
   visibleRows = []
   staticDirty = true
+  // 上一个会话的渲染签名/列表缓存不能带到新会话（否则会被"没变化"跳过）
+  renderSig.clear()
+  listHTML = ''
+  lastListFirstSeq = ''
+  const listEl = document.getElementById('rlist')
+  if (listEl) listEl.dataset.total = ''
   const url = new URL(location.href)
   url.searchParams.set('file', file)
   url.searchParams.delete('t')
@@ -508,6 +514,8 @@ async function switchSession(file) {
   armLoadingNotice()
   try {
     await loadStatic()
+    // 默认跟随最新：切会话后不要停留在"不跟随"的状态
+    following = true
     await seek(meta.duration)
     mark(...Object.keys(renderers))
     markDataReady()
@@ -1118,10 +1126,14 @@ function loop(now) {
   if (playing && meta) {
     // 焦点跟随：如果接下来一大段没有活动，直接跳到下一个活动点（留 150ms 余量）
     const next = focusMode ? nextActivityAfter(currentT + 1) : null
-    const idleAhead = next === null ? Infinity : next - currentT
-    if (focusMode && idleAhead > 1500) {
+    const hasNext = typeof next === 'number' && Number.isFinite(next)
+    if (focusMode && hasNext && next - currentT > 1500) {
+      const idleAhead = next - currentT
       currentT = Math.min(meta.duration, Math.max(0, next - 150))
       maybeSkipToast(idleAhead)
+    } else if (focusMode && !hasNext && meta.duration - currentT > 1500) {
+      // 后面没有活动了：直接到结尾，不弹「跳过」提示（避免 Infinity:NaN:NaN）
+      currentT = meta.duration
     } else {
       currentT += dt * speed
     }
@@ -2028,11 +2040,14 @@ function paintListWindow(resetScroll = false) {
       totalEvents: eventsMeta.count,
     })
     el.innerHTML = `<div class="empty empty-lg">${icon(filtered ? 'search' : 'list', '', 20)}<span>${message}</span></div>`
+    // 空态替换掉了 #rlistInner；把 total 归零，避免切换会话后"总数恰好相同"
+    // 时跳过重建、导致列表一直空白
+    el.dataset.total = '0'
     return
   }
   if (resetScroll) el.scrollTop = 0
   // 用 data 属性算出总高度；行内容仍然来自 renderList 拼好的 html
-  if (el.dataset.total !== String(total)) {
+  if (listNeedsRebuild(el.dataset.total, total, el.querySelector('#rlistInner') !== null)) {
     el.dataset.total = String(total)
     el.innerHTML = `<div id="rlistInner" style="position:relative;height:${total * LIST_ROW_H}px"></div>`
   }

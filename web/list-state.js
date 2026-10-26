@@ -16,3 +16,13 @@ export function emptyStateMessage({ tab, filtered, spansCount, eventsCount, tota
   if (totalEvents === 0) return '这个会话还没有事件'
   return eventsCount === 0 ? '当前时间窗内没有事件 · 拖动时间轴查看其它区间' : '这个会话还没有事件'
 }
+
+/**
+ * 虚拟列表容器是否需要重建。
+ *
+ * 只看 `dataset.total` 是不够的：切换会话时上一个会话可能留下相同的 total，
+ * 但中间渲染过空态，容器 `#rlistInner` 已经不存在了 —— 这时必须重建。
+ */
+export function listNeedsRebuild(datasetTotal, total, hasInner) {
+  return datasetTotal !== String(total) || !hasInner
+}

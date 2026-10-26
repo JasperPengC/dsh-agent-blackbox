@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.2] - 2026-10-26
+
+### Fixed
+
+- The event list stayed empty after opening or switching a session until a tab was
+  clicked; switching sessions now also restores follow-latest.
+- Focus-mode playback near the end of a session showed `跳过 Infinity:NaN:NaN`.
+
+### Changed
+
+- Bundled core and renderer refreshed from agent-blackbox main.
+
 ## [0.1.1] - 2026-10-25
 
 First release from this repository.
