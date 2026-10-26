@@ -73,6 +73,10 @@ node scripts/sync-core.mjs --from /path/to/agent-blackbox    # refresh core/web
 - [agent-blackbox](https://github.com/JasperPengC/agent-blackbox) — main project:
   session event model, dashboard, CLI and HTTP API
 
+## Community
+
+Promoted in the [LINUX DO](https://linux.do) community.
+
 ## Links
 
 - npm: https://www.npmjs.com/package/dsh-agent-blackbox

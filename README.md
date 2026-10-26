@@ -68,6 +68,10 @@ node scripts/sync-core.mjs --from /path/to/agent-blackbox   # 同步 core/web
 
 - [agent-blackbox](https://github.com/JasperPengC/agent-blackbox) — 主项目：会话事件模型、仪表盘、CLI 与 HTTP API
 
+## 社区
+
+本项目在 [LINUX DO](https://linux.do) 社区推广。
+
 ## 链接
 
 - npm：https://www.npmjs.com/package/dsh-agent-blackbox
