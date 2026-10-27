@@ -20,7 +20,7 @@ dsh plugin --profile desktop add dsh-agent-blackbox
 ```
 
 重启 DSH 后，侧栏出现「黑匣子」▣，主区可打开整屏面板。也可以在 DSH 的
-「设置 → 插件市场」里搜索 `agent-blackbox` 安装。
+「设置 → 插件市场」里搜索 `agent-blackbox` 安装。dshmarket 目录也有收录：[awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/JasperPengC/dsh-agent-blackbox/)。
 
 发布包已内置编译后的核心（`core/`）与前端（`web/`），不需要另外安装
 agent-blackbox，也不用本地构建。

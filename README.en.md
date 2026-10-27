@@ -22,7 +22,7 @@ dsh plugin --profile desktop add dsh-agent-blackbox
 ```
 
 Restart DSH, then open *Blackbox* from the sidebar. It can also be installed from
-*Settings → Plugin market* by searching `agent-blackbox`.
+*Settings → Plugin market* by searching `agent-blackbox`. It is also listed in the dshmarket catalog ([awesome-dsh-plugin.com](https://awesome-dsh-plugin.com/p/JasperPengC/dsh-agent-blackbox/)).
 
 The published package bundles the compiled core (`core/`) and renderer (`web/`),
 so no separate agent-blackbox install or local build is required.
